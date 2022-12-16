@@ -28,7 +28,13 @@ class Turn(object):
     self.reward=0
     self.done=False
 
-    
+  def state(self):
+    state2d = self.ballstate+[[self.xvel,self.yvel]]
+    state = []
+    for i in range(17):
+      for j in range(2):
+        state.append(state2d[i][j])
+    return state
  
   def taketurn(self,xvel,yvel):
     b = Balls(self.ballstate)
@@ -75,7 +81,7 @@ class Turn(object):
     elif action==5: #take shot
       self.ballstate,self.reward,self.done = self.taketurn(self.xvel,self.yvel)
 
-    return  self.ballstate+[[self.xvel,self.yvel]], self.reward, self.done
+    return  self.state(), self.reward, self.done
 
   def reset(self):
     self.ballstate=findballpos()
@@ -86,6 +92,8 @@ class Turn(object):
 
     self.reward=0
     self.done=False
+    return self.state()
+    
 
     
 

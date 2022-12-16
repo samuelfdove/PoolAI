@@ -4,182 +4,145 @@ from tensorflow import keras
 from keras import layers
 from Turn import Turn
 
-#This is a pretty much boiler plate copy from: https://keras.io/examples/rl/deep_q_network_breakout/
-
-#config parameters
-gamma = 0.99  # Discount factor for past rewards
-epsilon = 1.0  # Epsilon greedy parameter
-epsilon_min = 0.1  # Minimum epsilon greedy parameter
-epsilon_max = 1.0  # Maximum epsilon greedy parameter
-epsilon_interval = (
-    epsilon_max - epsilon_min
-)  # Rate at which to reduce chance of random action being taken
-batch_size = 32  # Size of batch taken from replay buffer
-max_steps_per_episode = 5000
-
-num_actions=5
-
-def create_q_model():
-  # Network defined by the Deepmind paper
-  model = keras.models.Sequential()
-  model.add(keras.layers.Flatten(input_shape=[17,2]))
-  model.add(keras.layers.Dense(64, activation="relu"))
-  model.add(keras.layers.Dense(64, activation="relu"))
-  model.add(keras.layers.Dense(32, activation="relu"))
-  model.add(keras.layers.Dense(num_actions, activation="softmax"))
-
-  return model
+import cProfile
+import pstats, math
+import io
+import pandas as pd
 
 
-# The first model makes the predictions for Q-values which are used to
-# make a action.
-model = create_q_model()
-# Build a target model for the prediction of future rewards.
-# The weights of a target model get updated every 10000 steps thus when the
-# loss between the Q-values is calculated the target Q-value is stable.
-model_target = create_q_model()
+def main():
+    #This is a pretty much boiler plate copy from: https://keras.io/examples/rl/actor_critic_cartpole/
 
-# In the Deepmind paper they use RMSProp however then Adam optimizer
-# improves training time
-optimizer = keras.optimizers.Adam(learning_rate=0.00025, clipnorm=1.0)
+    #parameters
+    gamma = 0.99  # Discount factor for past rewards
+    max_steps_per_episode = 2000
+    t=Turn()
+    eps = np.finfo(np.float32).eps.item()  # Smallest number such that 1.0 + eps != 1.0
+    num_actions = 5
+    num_hidden = 128
 
+    #model
+    inputs = layers.Input(shape=(34,))
+    #layer1 = layers.Dense(num_hidden, activation="relu")(inputs)
+    common = layers.Dense(num_hidden, activation="relu")(inputs)
+    action = layers.Dense(num_actions, activation="softmax")(common)
+    critic = layers.Dense(1)(common)
 
+    model = keras.Model(inputs=inputs, outputs=[action, critic])
 
-# Experience replay buffers
-action_history = []
-state_history = []
-state_next_history = []
-rewards_history = []
-done_history = []
-episode_reward_history = []
-running_reward = 0
-episode_count = 0
-frame_count = 0
-# Number of frames to take random action and observe output
-epsilon_random_frames = 50000
-# Number of frames for exploration
-epsilon_greedy_frames = 1000000.0
-# Maximum replay length
-# Note: The Deepmind paper suggests 1000000 however this causes memory issues
-max_memory_length = 100000
-# Train the model after 1 actions
-update_after_actions = 1
-# How often to update the target network
-update_target_network = 10000
-# Using huber loss for stability
-loss_function = keras.losses.Huber()
+    optimizer = keras.optimizers.Adam(learning_rate=0.01)
+    huber_loss = keras.losses.Huber()
+    action_probs_history = []
+    critic_value_history = []
+    rewards_history = []
+    running_reward = 0
+    episode_count = 0
 
-#setting up environment
-t = Turn()
+    while True:  # Run until solved
+        print(episode_count)
+        state = t.reset()
+        episode_reward = 0
+        with tf.GradientTape() as tape:
+            for timestep in range(1, max_steps_per_episode):
+                # env.render(); Adding this line would show the attempts
+                # of the agent in a pop up window.
 
-while True:  # Run until solved
-    state = np.array(t.reset())
-    episode_reward = 0
+                state = tf.convert_to_tensor(state)
+                state = tf.expand_dims(state, 0)
 
-    for timestep in range(1, max_steps_per_episode):
-        # env.render(); Adding this line would show the attempts
-        # of the agent in a pop up window.
-        frame_count += 1
+                # Predict action probabilities and estimated future rewards
+                # from environment state
+                action_probs, critic_value = model(state)
+                critic_value_history.append(critic_value[0, 0])
 
-        # Use epsilon-greedy for exploration
-        if frame_count < epsilon_random_frames or epsilon > np.random.rand(1)[0]:
-            # Take random action
-            action = np.random.choice(num_actions)
-        else:
-            # Predict action Q-values
-            # From environment state
-            state_tensor = tf.convert_to_tensor(state)
-            state_tensor = tf.expand_dims(state_tensor, 0)
-            action_probs = model(state_tensor, training=False)
-            # Take best action
-            action = tf.argmax(action_probs[0]).numpy()
+                # Sample action from action probability distribution
+                action = np.random.choice(num_actions, p=np.squeeze(action_probs))
+                action_probs_history.append(tf.math.log(action_probs[0, action]))
 
-        # Decay probability of taking random action
-        epsilon -= epsilon_interval / epsilon_greedy_frames
-        epsilon = max(epsilon, epsilon_min)
+                # Apply the sampled action in our environment
+                state, reward, done = t.step(action)
+                rewards_history.append(reward)
+                episode_reward += reward
 
-        # Apply the sampled action in our environment
-        state_next, reward, done = t.step(action)
-        state_next = np.array(state_next)
+                if done:
+                    print('done')
+                    break
 
-        episode_reward += reward
+            # Update running reward to check condition for solving
+            running_reward = 0.05 * episode_reward + (1 - 0.05) * running_reward
 
-        # Save actions and states in replay buffer
-        action_history.append(action)
-        state_history.append(state)
-        state_next_history.append(state_next)
-        done_history.append(done)
-        rewards_history.append(reward)
-        state = state_next
+            # Calculate expected value from rewards
+            # - At each timestep what was the total reward received after that timestep
+            # - Rewards in the past are discounted by multiplying them with gamma
+            # - These are the labels for our critic
+            returns = []
+            discounted_sum = 0
+            for r in rewards_history[::-1]:
+                discounted_sum = r + gamma * discounted_sum
+                returns.insert(0, discounted_sum)
 
-        # Update once batch size is over 32
-        if len(done_history) > batch_size:
+            # Normalize
+            returns = np.array(returns)
+            returns = (returns - np.mean(returns)) / (np.std(returns) + eps)
+            returns = returns.tolist()
 
-            # Get indices of samples for replay buffers
-            indices = np.random.choice(range(len(done_history)), size=batch_size)
+            # Calculating loss values to update our network
+            history = zip(action_probs_history, critic_value_history, returns)
+            actor_losses = []
+            critic_losses = []
+            for log_prob, value, ret in history:
+                # At this point in history, the critic estimated that we would get a
+                # total reward = `value` in the future. We took an action with log probability
+                # of `log_prob` and ended up recieving a total reward = `ret`.
+                # The actor must be updated so that it predicts an action that leads to
+                # high rewards (compared to critic's estimate) with high probability.
+                diff = ret - value
+                actor_losses.append(-log_prob * diff)  # actor loss
 
-            # Using list comprehension to sample from replay buffer
-            state_sample = np.array([state_history[i] for i in indices])
-            state_next_sample = np.array([state_next_history[i] for i in indices])
-            rewards_sample = [rewards_history[i] for i in indices]
-            action_sample = [action_history[i] for i in indices]
-            done_sample = tf.convert_to_tensor(
-                [float(done_history[i]) for i in indices]
-            )
-
-            # Build the updated Q-values for the sampled future states
-            # Use the target model for stability
-            future_rewards = model_target.predict(state_next_sample)
-            # Q value = reward + discount factor * expected future reward
-            updated_q_values = rewards_sample + gamma * tf.reduce_max(
-                future_rewards, axis=1
-            )
-
-            # If final frame set the last value to -1
-            updated_q_values = updated_q_values * (1 - done_sample) - done_sample
-
-            # Create a mask so we only calculate loss on the updated Q-values
-            masks = tf.one_hot(action_sample, num_actions)
-
-            with tf.GradientTape() as tape:
-                # Train the model on the states and updated Q-values
-                q_values = model(state_sample)
-
-                # Apply the masks to the Q-values to get the Q-value for action taken
-                q_action = tf.reduce_sum(tf.multiply(q_values, masks), axis=1)
-                # Calculate loss between new Q-value and old Q-value
-                loss = loss_function(updated_q_values, q_action)
+                # The critic must be updated so that it predicts a better estimate of
+                # the future rewards.
+                critic_losses.append(
+                    huber_loss(tf.expand_dims(value, 0), tf.expand_dims(ret, 0))
+                )
 
             # Backpropagation
-            grads = tape.gradient(loss, model.trainable_variables)
+            loss_value = sum(actor_losses) + sum(critic_losses)
+            grads = tape.gradient(loss_value, model.trainable_variables)
             optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
-        if frame_count % update_target_network == 0:
-            # update the the target network with new weights
-            model_target.set_weights(model.get_weights())
-            # Log details
-            template = "running reward: {:.2f} at episode {}, frame count {}"
-            print(template.format(running_reward, episode_count, frame_count))
+            # Clear the loss and reward history
+            action_probs_history.clear()
+            critic_value_history.clear()
+            rewards_history.clear()
 
-        # Limit the state and reward history
-        if len(rewards_history) > max_memory_length:
-            del rewards_history[:1]
-            del state_history[:1]
-            del state_next_history[:1]
-            del action_history[:1]
-            del done_history[:1]
-
-        if done:
+        # Log details
+        episode_count += 1
+        if episode_count % 10 == 0:
+            template = "running reward: {:.2f} at episode {}"
+            print(template.format(running_reward, episode_count))
             break
 
-    # Update running reward to check condition for solving
-    episode_reward_history.append(episode_reward)
-    if len(episode_reward_history) > 100:
-        del episode_reward_history[:1]
-    running_reward = np.mean(episode_reward_history)
+        if running_reward > 900:  # Condition to consider the task solved
+            print("Solved at episode {}!".format(episode_count))
+            break
 
-    episode_count += 1
+print('here')
 
-    if running_reward > 40:  # Condition to consider the task solved
-        print("Solved at episode {}!".format(episode_count))
-        break
+pr = cProfile.Profile()
+pr.enable()
+main()
+pr.disable()
+
+result = io.StringIO()
+pstats.Stats(pr,stream=result).print_stats()
+result=result.getvalue()
+# chop the string into a csv-like buffer
+result='ncalls'+result.split('ncalls')[-1]
+result='\n'.join([','.join(line.rstrip().split(None,5)) for line in result.split('\n')])
+# save it to disk
+ 
+with open('test.csv', 'w+') as f:
+    #f=open(result.rsplit('.')[0]+'.csv','w')
+    f.write(result)
+    f.close()
+#main()
