@@ -43,7 +43,7 @@ class Holes(object):
 
           #points
           if i==0:
-            reward-=10
+            reward-=100
             self.canContinue=False
           elif i>0 and i<8:
             reward+=100

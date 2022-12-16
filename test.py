@@ -4,9 +4,9 @@ from Turn import *
 import random
 
 while True:
-  t = Turn(findballpos())
-  print(t.initialstate)
+  t = Turn()
+  print(t.ballstate)
   # t.taketurn(random.randint(0,2500)/1000,random.randint(0,2500)/1000)
-  t.taketurn(.1,.1)
+  t.taketurn(3,3)
   pygamemain()
 
