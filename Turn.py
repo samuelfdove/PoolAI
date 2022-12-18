@@ -43,7 +43,7 @@ class Turn(object):
   def taketurn(self,xvel,yvel):
     b = Balls(self.ballstate)
     b.strikecuexy(xvel,yvel)
-    log = True
+    log = False
     reward=0
     if log:
       global outfile
