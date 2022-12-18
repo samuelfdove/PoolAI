@@ -6,7 +6,7 @@ def main():
   (width,height) = (1700,1000)
   #(width,height) = (1195,630)
   screen = pygame.display.set_mode((width,height))
-  table = pygame.image.load('poolassets/table_w_guidelines.png')
+  table = pygame.image.load('poolassets/table.png')
   table = pygame.transform.scale(table,(width,height))
   log = open('outputtext.txt','r')
   balls = []
@@ -54,7 +54,7 @@ def main():
 
             display = myFont.render(message, 1, (0,0,0))
 
-            screen.blit(display,(500+50*(i-17),500+50*(i-17)))
+            #screen.blit(display,(500+50*(i-17),500+50*(i-17)))
             
           
 

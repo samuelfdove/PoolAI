@@ -30,6 +30,9 @@ class Turn(object):
 
   def state(self):
     state2d = self.ballstate+[[self.xvel,self.yvel]]
+    # print(len(state2d))
+    # print(len(self.ballstate),self.xvel,self.yvel)
+    print(state2d)
     state = []
     for i in range(17):
       for j in range(2):
@@ -53,6 +56,9 @@ class Turn(object):
         b.printpos(outfile)
 
       self.w.wallcollision(b)
+    
+    if log:
+      outfile.close()
 
     
     if self.h.canContinue==True and b.canContinue==True:
@@ -66,20 +72,23 @@ class Turn(object):
     return finalstate,reward,done
 
   def step(self,action):
-    if action==1: #increase x
+    if action==0: #increase x
       if self.xvel<=3:
         self.xvel += .1
-    elif action==2: #decrease x
+    elif action==1: #decrease x
       if self.xvel>=-3:
         self.xvel -= .1
-    elif action==3: #increase y
+    elif action==2: #increase y
       if self.yvel<=3:
         self.yvel += .1
-    elif action==4: #decrease y
+    elif action==3: #decrease y
       if self.yvel>=-3:
         self.yvel -= .1
-    elif action==5: #take shot
+    else: #take shot
+      print('shot')
       self.ballstate,self.reward,self.done = self.taketurn(self.xvel,self.yvel)
+      self.xvel=0
+      self.yvel=0
 
     return  self.state(), self.reward, self.done
 
@@ -127,5 +136,5 @@ def test():
 
 
 #main()
-#test()
+test()
 #cProfile.run('test()')
