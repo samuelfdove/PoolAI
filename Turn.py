@@ -29,10 +29,11 @@ class Turn(object):
     self.done=False
 
   def state(self):
-    state2d = self.ballstate+[[self.xvel,self.yvel]]
-    # print(len(state2d))
-    # print(len(self.ballstate),self.xvel,self.yvel)
-    print(state2d)
+
+    state2d = np.append(self.ballstate,[self.xvel,self.yvel])
+    return state2d.flatten()
+
+    #state2d = self.ballstate+[[self.xvel,self.yvel]]
     state = []
     for i in range(17):
       for j in range(2):
@@ -85,7 +86,6 @@ class Turn(object):
       if self.yvel>=-3:
         self.yvel -= .1
     else: #take shot
-      print('shot')
       self.ballstate,self.reward,self.done = self.taketurn(self.xvel,self.yvel)
       self.xvel=0
       self.yvel=0

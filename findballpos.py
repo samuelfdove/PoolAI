@@ -1,5 +1,6 @@
 import random
 import math
+import numpy as np
 
 def mindis(ballpos,newloc):
   mind = 30000
@@ -27,5 +28,5 @@ def findballpos():
       while mindis(ballpos,newloc)<=70.15:
         newloc = [random.randint(183,2205),random.randint(172,1086)]
       ballpos.append(newloc)
-  return ballpos
+  return np.asarray(ballpos)
   

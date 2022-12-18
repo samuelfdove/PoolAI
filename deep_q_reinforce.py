@@ -63,16 +63,17 @@ episode_count = 0
 frame_count = 0
 # Number of frames to take random action and observe output
 epsilon_random_frames = 50000
+#epsilon_random_frames = 5000
 # Number of frames for exploration
 epsilon_greedy_frames = 1000000.0
+#epsilon_greedy_frames = 100000.0
 # Maximum replay length
 # Note: The Deepmind paper suggests 1000000 however this causes memory issues
 max_memory_length = 100000
-# Train the model after 1 actions
-update_after_actions = 1
+
 # How often to update the target network
 update_target_network = 10000
-update_target_network = 100
+#update_target_network = 1000
 # Using huber loss for stability
 loss_function = keras.losses.Huber()
 
